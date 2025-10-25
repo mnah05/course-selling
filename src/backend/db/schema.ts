@@ -9,6 +9,7 @@ import {
   numeric,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import { password } from "bun";
 
 /**
  * User role enumeration
@@ -34,16 +35,11 @@ export const purchase_status_enum = pgEnum("purchase_status", [
  * Admins create and manage courses, consumers purchase and view them
  */
 export const users_table = pgTable("users", {
-  /** Unique user identifier (typically from auth provider like Clerk/Auth0) */
   id: varchar("id").primaryKey(),
-
-  /** User's full display name */
   full_name: text("full_name").notNull(),
-
-  /** Unique email address for authentication and communication */
   email: varchar("email").unique().notNull(),
-
-  /** Timestamp when the user account was created */
+  hashedPassword: varchar("password").notNull(),
+  saltPassword: varchar("salt").notNull(),
   created_at: timestamp("created_at")
     .default(sql`NOW()`)
     .notNull(),
@@ -55,8 +51,6 @@ export const users_table = pgTable("users", {
   updated_at: timestamp("updated_at")
     .default(sql`NOW()`)
     .notNull(),
-
-  /** User's role determining their permissions in the system */
   role: user_role_enum("role").notNull().default("consumer"),
 
   /**
@@ -71,7 +65,6 @@ export const users_table = pgTable("users", {
  * Each course has content items and can be purchased by consumers
  */
 export const courses_table = pgTable("courses", {
-  /** Unique course identifier */
   id: varchar("course_id").primaryKey(),
 
   /**
@@ -82,16 +75,10 @@ export const courses_table = pgTable("courses", {
     onDelete: "set null",
   }),
 
-  /** Display name of the course */
   course_name: varchar("course_name").notNull(),
 
-  /**
-   * Course price in USD
-   * Supports up to 99,999,999.99 (10 digits total, 2 decimal places)
-   */
   price: numeric("price", { precision: 10, scale: 2 }).notNull(),
 
-  /** Timestamp when the course was created */
   created_at: timestamp("created_at")
     .default(sql`NOW()`)
     .notNull(),
@@ -117,7 +104,6 @@ export const courses_table = pgTable("courses", {
  * Content is deleted when parent course is deleted (onDelete: "cascade")
  */
 export const course_content_table = pgTable("course_content", {
-  /** Unique content item identifier */
   id: varchar("content_id").primaryKey(),
 
   /**
@@ -128,33 +114,13 @@ export const course_content_table = pgTable("course_content", {
     onDelete: "cascade",
   }),
 
-  /** Display title of the content item (e.g., "Introduction to React") */
   title: varchar("title", { length: 255 }).notNull(),
-
-  /** Optional detailed description or transcript of the content */
   description: text("description"),
-
-  /**
-   * Type of content stored
-   * Expected values: 'video', 'image', 'pdf'
-   * Consider using an enum if types are fixed
-   */
   content_type: varchar("content_type").notNull(),
-
-  /**
-   * URL to the content file in external storage (e.g., S3, Cloudflare R2)
-   * Example: https://cdn.example.com/videos/intro-to-react.mp4
-   * NOTE: Do NOT store actual file data in the database
-   */
   content_url: text("content_url").notNull(),
 
-  /**
-   * Display order of content within the course
-   * Lower numbers appear first. Allows manual ordering by admin
-   */
   order: integer("order"),
 
-  /** Timestamp when the content was created */
   created_at: timestamp("created_at")
     .default(sql`NOW()`)
     .notNull(),
@@ -184,7 +150,6 @@ export const course_content_table = pgTable("course_content", {
  * 3. Refund processed -> update status='refunded', revoke enrollment access
  */
 export const purchase_history_table = pgTable("purchase_history", {
-  /** Unique purchase transaction identifier */
   id: varchar("purchase_id").primaryKey(),
 
   /**
@@ -203,7 +168,6 @@ export const purchase_history_table = pgTable("purchase_history", {
     onDelete: "restrict",
   }),
 
-  /** Timestamp when the purchase was initiated */
   purchase_date: timestamp("purchase_date")
     .default(sql`NOW()`)
     .notNull(),
@@ -225,11 +189,6 @@ export const purchase_history_table = pgTable("purchase_history", {
    */
   payment_method: varchar("payment_method").notNull(),
 
-  /**
-   * Amount paid for the course in USD
-   * Should match course price at time of purchase
-   * Supports up to 99,999,999.99
-   */
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
 });
 
@@ -243,30 +202,20 @@ export const purchase_history_table = pgTable("purchase_history", {
  * - Query this table to verify if user can view course content
  */
 export const course_enrollments_table = pgTable("course_enrollments", {
-  /** Unique enrollment record identifier */
   id: varchar("enrollment_id").primaryKey(),
 
-  /**
-   * User enrolled in the course
-   * Enrollment deleted when user is deleted (onDelete: "cascade")
-   */
   user_id: varchar("user_id")
     .references(() => users_table.id, {
       onDelete: "cascade",
     })
     .notNull(),
 
-  /**
-   * Course the user is enrolled in
-   * Enrollment deleted when course is deleted (onDelete: "cascade")
-   */
   course_id: varchar("course_id")
     .references(() => courses_table.id, {
       onDelete: "cascade",
     })
     .notNull(),
 
-  /** Timestamp when user was granted access to the course */
   enrolled_at: timestamp("enrolled_at")
     .default(sql`NOW()`)
     .notNull(),
