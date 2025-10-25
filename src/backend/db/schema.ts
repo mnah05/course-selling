@@ -9,7 +9,6 @@ import {
   numeric,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { password } from "bun";
 
 /**
  * User role enumeration
@@ -51,6 +50,7 @@ export const users_table = pgTable("users", {
   updated_at: timestamp("updated_at")
     .default(sql`NOW()`)
     .notNull(),
+
   role: user_role_enum("role").notNull().default("consumer"),
 
   /**
@@ -202,7 +202,7 @@ export const purchase_history_table = pgTable("purchase_history", {
  * - Query this table to verify if user can view course content
  */
 export const course_enrollments_table = pgTable("course_enrollments", {
-  id: varchar("enrollment_id").primaryKey(),
+  id: varchar("enrollment_id").primaryKey(), // for future use like tracking stats,grades or assignment
 
   user_id: varchar("user_id")
     .references(() => users_table.id, {
